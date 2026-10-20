@@ -22,6 +22,65 @@ optuna.logging.set_verbosity(optuna.logging.WARNING)
 # 3. Silencia os logs informativos do PyTorch Lightning
 logging.getLogger("pytorch_lightning").setLevel(logging.ERROR)
 
+"""
+======================================================================================
+SCRIPT DE TUNAGEM DE HIPERPARÂMETROS - MODELOS DE CAPTCHA (VGG e ConvNeXt)
+======================================================================================
+
+Este script realiza a busca automatizada dos melhores hiperparâmetros para as 
+arquiteturas de Redes Neurais Convolucionais utilizando Optuna e PyTorch Lightning.
+
+--------------------------------------------------------------------------------------
+COMO EXECUTAR:
+--------------------------------------------------------------------------------------
+1. Modo Normal (Tunagem Completa):
+   Executa a busca completa no dataset inteiro utilizando dezenas de iterações.
+   Recomendado rodar em GPU (ex: cluster APUANA).
+   Comando: python -m Scripts.tune_models
+
+2. Modo de Teste (Sanity Check):
+   Limita o dataset a 2 mini-lotes, executa apenas 1 época e 2 iterações no Optuna.
+   Ideal para debugar o código em segundos e verificar se há erros de sintaxe 
+   antes de comprometer horas de processamento.
+   Comando: python -m Scripts.tune_models --test
+
+--------------------------------------------------------------------------------------
+COMO ADICIONAR NOVOS MODELOS:
+--------------------------------------------------------------------------------------
+Para inserir uma nova arquitetura (ex: ResNet) na tunagem, siga 4 passos simples:
+  1. Importe a classe do novo modelo no topo do script.
+  2. Crie uma nova chave com o nome do modelo no dicionário `SEARCH_SPACE` 
+     definindo as faixas de valores (low/high) dos seus hiperparâmetros.
+  3. Na função `objective()`, adicione um `elif model_name == "NomeDoSeuModelo":` 
+     para instanciar a classe passando o dicionário `**params`.
+  4. Adicione a string com o nome do modelo na lista `MODELOS_PARA_TUNAR` 
+     no final do arquivo.
+
+--------------------------------------------------------------------------------------
+PARTES IMPORTANTES DA ARQUITETURA DO CÓDIGO:
+--------------------------------------------------------------------------------------
+A. O Dicionário `SEARCH_SPACE`:
+   É o "coração" do script. Ao invés de alterar variáveis espalhadas pelo código, 
+   todas as faixas de busca (learning rate, dropout, camadas densas) estão unificadas 
+   neste dicionário no topo do arquivo. Para testar novos valores, basta alterá-lo.
+
+B. Reprodutibilidade Total (Seeds):
+   Para garantir o padrão acadêmico e resultados determinísticos (mesmo resultado em 
+   execuções diferentes), o código trava as sementes globais (PyTorch, Numpy, CUDA) 
+   usando `pl.seed_everything(42)` e fixa o explorador do Optuna com `TPESampler(seed=42)`.
+
+C. Prevenção de Gargalos de Armazenamento:
+   O PyTorch Lightning está configurado com `enable_checkpointing=False`. Isso evita 
+   que o Optuna grave centenas de arquivos pesados de pesos (.ckpt) no HD do cluster 
+   durante as dezenas de iterações inúteis, salvando espaço em disco.
+
+D. Redução de Verbosidade:
+   Filtros nativos desativam logs do Optuna, warnings de descontinuação do Python 
+   e barras de progresso do Lightning, mantendo o terminal limpo e focado apenas 
+   nos resultados finais de cada Trial. Caso não queira que isso ocorra, basta
+   comentar essa parte do código
+======================================================================================
+"""
 
 RANDOM_SEED = 42
 
