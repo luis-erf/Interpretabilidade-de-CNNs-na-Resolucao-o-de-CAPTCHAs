@@ -1,4 +1,7 @@
 import argparse
+import warnings
+import logging
+
 import optuna
 import pytorch_lightning as pl
 from pytorch_lightning.callbacks import EarlyStopping
@@ -8,6 +11,19 @@ import pandas as pd
 from Dataset.Datamodule import CaptchaDataModule
 from Models.ConvNext import ConvNeXtCaptcha
 from Models.Vgg import VGGCaptcha
+
+
+# 1. Silencia avisos de deprecamento e warnings gerais do Python/Lightning
+warnings.filterwarnings("ignore")
+
+# 2. Silencia os logs informativos do Optuna (exibe apenas se houver ERRO)
+optuna.logging.set_verbosity(optuna.logging.WARNING)
+
+# 3. Silencia os logs informativos do PyTorch Lightning
+logging.getLogger("pytorch_lightning").setLevel(logging.ERROR)
+
+
+RANDOM_SEED = 42
 
 # =====================================================================
 # 1. DICIONÁRIO DE ESPAÇO DE BUSCA (SEARCH SPACE)
@@ -88,13 +104,13 @@ def objective(trial, model_name, datamodule, test_mode=False):
     # 6. Iniciar o Treinamento
     trainer.fit(model, datamodule=datamodule)
 
-    # 7. Recuperar a melhor métrica de validação obtida pelo modelo
-    val_loss = trainer.callback_metrics.get("val_loss")
-    if val_loss is None:
-        return float('inf') # Se falhar, retorna infinito para o Optuna descartar a tentativa
+    # 7. Recuperar o MELHOR resultado de validação alcançado nesta tentativa
+    best_val_loss = early_stop.best_score
+    
+    if best_val_loss is None:
+        return float('inf') # Se algo falhar drasticamente, descarta a tentativa
         
-    return val_loss.item()
-
+    return best_val_loss.item()
 
 def run_tuning(models_to_tune, datamodule, n_trials=15, test_mode=False):
     """
@@ -102,13 +118,16 @@ def run_tuning(models_to_tune, datamodule, n_trials=15, test_mode=False):
     """
     melhores_resultados = {}
 
+    #TRAVA A SEED DO OPTUNA
+    sampler_deterministico = optuna.samplers.TPESampler(seed=RANDOM_SEED)
+
     for model_name in models_to_tune:
         print(f"\n{'='*50}")
         print(f" Iniciando Tunagem para: {model_name} ")
         print(f"{'='*50}")
 
         # Cria um 'study' (estudo) no Optuna com o objetivo de minimizar o erro
-        study = optuna.create_study(direction="minimize", study_name=f"Tuning_{model_name}")
+        study = optuna.create_study(direction="minimize", study_name=f"Tuning_{model_name}", sampler=sampler_deterministico)
         
         # Ajusta a quantidade de iterações do Optuna se for um teste rápido
         trials_to_run = 2 if test_mode else n_trials
@@ -134,6 +153,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Script de Tunagem de Modelos para CAPTCHA")
     parser.add_argument('--test', action='store_true', help="Ativa o modo de teste rápido (Sanity Check)")
     args = parser.parse_args()
+
+    pl.seed_everything(RANDOM_SEED, workers=True)
 
     # A variável agora recebe o valor passado no terminal (True se --test existir, False caso contrário)
     TEST_MODE = args.test
