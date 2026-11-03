@@ -11,6 +11,8 @@ import pandas as pd
 from Dataset.Datamodule import CaptchaDataModule
 from Models.ConvNext import ConvNeXtCaptcha
 from Models.Vgg import VGGCaptcha
+from Models.ResNet import ResNetCaptcha
+from Models.Inception import InceptionCaptcha
 
 
 # 1. Silencia avisos de deprecamento e warnings gerais do Python/Lightning
@@ -43,6 +45,10 @@ COMO EXECUTAR:
    Ideal para debugar o código em segundos e verificar se há erros de sintaxe 
    antes de comprometer horas de processamento.
    Comando: python -m Scripts.tune_models --test
+
+3. Opções úteis:
+   --modelos ResNetCaptcha InceptionCaptcha   Tuna apenas os modelos escolhidos
+   --diretorio_dados caminho/da/pasta         Pasta do dataset (padrão: dataset_captcha)
 
 --------------------------------------------------------------------------------------
 COMO ADICIONAR NOVOS MODELOS:
@@ -100,6 +106,18 @@ SEARCH_SPACE = {
         "learning_rate": {"type": "log_float", "low": 1e-4, "high": 1e-2},
         "weight_decay": {"type": "log_float", "low": 1e-5, "high": 1e-2},
         "expansion_ratio": {"type": "categorical", "choices": [2, 4, 6]}
+    },
+    "ResNetCaptcha": {
+        "learning_rate": {"type": "log_float", "low": 1e-4, "high": 1e-2},
+        "weight_decay": {"type": "log_float", "low": 1e-6, "high": 1e-2},
+        "dropout_rate": {"type": "float", "low": 0.1, "high": 0.5},
+        "pool_width": {"type": "categorical", "choices": [1, 4, 5]}
+    },
+    "InceptionCaptcha": {
+        "learning_rate": {"type": "log_float", "low": 1e-4, "high": 1e-2},
+        "weight_decay": {"type": "log_float", "low": 1e-6, "high": 1e-2},
+        "dropout_rate": {"type": "float", "low": 0.2, "high": 0.6},
+        "pool_width": {"type": "categorical", "choices": [1, 4, 5]}
     }
 }
 # =====================================================================
@@ -131,6 +149,12 @@ def objective(trial, model_name, datamodule, test_mode=False):
         
     elif model_name == "ConvNeXtCaptcha":
         model = ConvNeXtCaptcha(**params)
+
+    elif model_name == "ResNetCaptcha":
+        model = ResNetCaptcha(**params)
+
+    elif model_name == "InceptionCaptcha":
+        model = InceptionCaptcha(**params)
     else:
         raise ValueError(f"Modelo {model_name} não reconhecido.")
 
@@ -211,6 +235,8 @@ if __name__ == "__main__":
     # =====================================================================
     parser = argparse.ArgumentParser(description="Script de Tunagem de Modelos para CAPTCHA")
     parser.add_argument('--test', action='store_true', help="Ativa o modo de teste rápido (Sanity Check)")
+    parser.add_argument('--diretorio_dados', default="dataset_captcha", help="Pasta com as imagens do dataset")
+    parser.add_argument('--modelos', nargs='+', choices=list(SEARCH_SPACE), help="Tuna apenas os modelos escolhidos")
     args = parser.parse_args()
 
     pl.seed_everything(RANDOM_SEED, workers=True)
@@ -219,13 +245,15 @@ if __name__ == "__main__":
     TEST_MODE = args.test
     
     # Define quais modelos do SEARCH_SPACE queremos tunar agora
-    MODELOS_PARA_TUNAR = ["VGGCaptcha", "ConvNeXtCaptcha"]
+    MODELOS_PARA_TUNAR = ["VGGCaptcha", "ConvNeXtCaptcha", "ResNetCaptcha", "InceptionCaptcha"]
+    if args.modelos:
+        MODELOS_PARA_TUNAR = args.modelos
     
     print(f"Modo de Teste (Sanity Check): {'ATIVADO' if TEST_MODE else 'DESATIVADO'}")
     
     # Instancia o DataModule (Ajuste o caminho da pasta conforme seu gerador)
     datamodule = CaptchaDataModule(
-        diretorio_dados="dataset_captcha", 
+        diretorio_dados=args.diretorio_dados, 
         batch_size=32, 
         num_workers=2
     )
