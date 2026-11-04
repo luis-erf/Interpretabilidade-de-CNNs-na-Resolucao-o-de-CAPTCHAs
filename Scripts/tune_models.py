@@ -9,6 +9,7 @@ import torch
 import pandas as pd
 
 from Dataset.Datamodule import CaptchaDataModule
+from Models.AlexNet import AlexNetCaptcha
 from Models.ConvNext import ConvNeXtCaptcha
 from Models.Vgg import VGGCaptcha
 from Models.ResNet import ResNetCaptcha
@@ -95,6 +96,14 @@ RANDOM_SEED = 42
 # =====================================================================
 # Você pode adicionar, remover ou alterar os limites dos hiperparâmetros aqui.
 SEARCH_SPACE = {
+    "AlexNetCaptcha": {
+        # Faixa menor que a dos demais modelos, pois a AlexNet não tem BatchNorm
+        "learning_rate": {"type": "log_float", "low": 1e-5, "high": 1e-3},
+        "weight_decay": {"type": "log_float", "low": 1e-6, "high": 1e-2},
+        "dropout_rate": {"type": "float", "low": 0.2, "high": 0.6},
+        "fc_sizes_str": {"type": "categorical", "choices": ["1024_1024", "2048_2048", "4096_4096"]},
+        "pool_width": {"type": "categorical", "choices": [3, 9]}
+    },
     "VGGCaptcha": {
         "learning_rate": {"type": "log_float", "low": 1e-4, "high": 1e-2},
         "dropout_rate": {"type": "float", "low": 0.2, "high": 0.6},
@@ -142,7 +151,11 @@ def objective(trial, model_name, datamodule, test_mode=False):
             params[param_name] = trial.suggest_categorical(param_name, config["choices"])
 
     # 3. Instanciar o modelo correspondente com os hiperparâmetros escolhidos
-    if model_name == "VGGCaptcha":
+    if model_name == "AlexNetCaptcha":
+        params["fc_sizes"] = parse_fc_sizes(params.pop("fc_sizes_str"))
+        model = AlexNetCaptcha(**params)
+
+    elif model_name == "VGGCaptcha":
         # Converte a string sugerida de volta para a lista (ex: "512_512" -> [512, 512])
         params["fc_sizes"] = parse_fc_sizes(params.pop("fc_sizes_str"))
         model = VGGCaptcha(**params)
@@ -245,7 +258,7 @@ if __name__ == "__main__":
     TEST_MODE = args.test
     
     # Define quais modelos do SEARCH_SPACE queremos tunar agora
-    MODELOS_PARA_TUNAR = ["VGGCaptcha", "ConvNeXtCaptcha", "ResNetCaptcha", "InceptionCaptcha"]
+    MODELOS_PARA_TUNAR = ["AlexNetCaptcha", "VGGCaptcha", "ConvNeXtCaptcha", "ResNetCaptcha", "InceptionCaptcha"]
     if args.modelos:
         MODELOS_PARA_TUNAR = args.modelos
     

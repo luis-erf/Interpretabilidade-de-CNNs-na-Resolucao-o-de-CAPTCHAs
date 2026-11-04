@@ -11,6 +11,7 @@ import pytorch_lightning as pl
 from pytorch_lightning.callbacks import EarlyStopping, ModelCheckpoint
 
 from Dataset.Datamodule import CaptchaDataModule
+from Models.AlexNet import AlexNetCaptcha
 from Models.ConvNext import ConvNeXtCaptcha
 from Models.Vgg import VGGCaptcha
 from Models.ResNet import ResNetCaptcha
@@ -53,6 +54,7 @@ O CSV de resultados é atualizado a cada treino (mesmas colunas do scaling_effic
 RANDOM_SEED = 42
 
 MODELOS = {
+    "AlexNetCaptcha": AlexNetCaptcha,
     "VGGCaptcha": VGGCaptcha,
     "ConvNeXtCaptcha": ConvNeXtCaptcha,
     "ResNetCaptcha": ResNetCaptcha,
