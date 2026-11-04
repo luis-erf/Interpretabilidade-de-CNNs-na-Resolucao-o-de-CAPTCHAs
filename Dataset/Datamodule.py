@@ -17,7 +17,8 @@ class CaptchaDataset(Dataset):
     """
     def __init__(self, diretorio_dados, transform=None):
         self.diretorio_dados = diretorio_dados
-        self.arquivos_imagem = [f for f in os.listdir(diretorio_dados) if f.endswith('.png')]
+        # sorted(): a ordem do os.listdir varia entre máquinas e mudaria o split, mesmo com a seed fixa
+        self.arquivos_imagem = sorted(f for f in os.listdir(diretorio_dados) if f.endswith('.png'))
         self.transform = transform
 
     def __len__(self):

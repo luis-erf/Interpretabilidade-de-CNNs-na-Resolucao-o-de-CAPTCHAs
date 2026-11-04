@@ -13,6 +13,7 @@ from pytorch_lightning.callbacks import EarlyStopping, ModelCheckpoint
 from Dataset.Datamodule import CaptchaDataModule
 from Models.AlexNet import AlexNetCaptcha
 from Models.ConvNext import ConvNeXtCaptcha
+from Models.EfficientNet import EfficientNetCaptcha
 from Models.Vgg import VGGCaptcha
 from Models.ResNet import ResNetCaptcha
 from Models.Inception import InceptionCaptcha
@@ -57,6 +58,7 @@ MODELOS = {
     "AlexNetCaptcha": AlexNetCaptcha,
     "VGGCaptcha": VGGCaptcha,
     "ConvNeXtCaptcha": ConvNeXtCaptcha,
+    "EfficientNetCaptcha": EfficientNetCaptcha,
     "ResNetCaptcha": ResNetCaptcha,
     "InceptionCaptcha": InceptionCaptcha,
 }
@@ -78,8 +80,9 @@ def carregar_hiperparametros(caminho_csv, modelo):
     params = {}
     for nome, valor in df[modelo].dropna().items():
         if nome == "fc_sizes_str":
-            # Mesma conversão feita na função objective() do tune_models.py
-            params["fc_sizes"] = [int(x) for x in str(valor).split('_')]
+            # Mesma conversão da objective() do tune_models.py. O float() cobre o caso em que
+            # o pandas lê a coluna como numérica e "512" chega aqui como 512.0
+            params["fc_sizes"] = [int(float(x)) for x in str(valor).split('_')]
         elif nome in PARAMS_INTEIROS:
             params[nome] = int(float(valor))
         else:

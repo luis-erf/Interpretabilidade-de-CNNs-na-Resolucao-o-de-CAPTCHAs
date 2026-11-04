@@ -172,10 +172,11 @@ def objective(trial, model_name, datamodule, test_mode=False):
         raise ValueError(f"Modelo {model_name} não reconhecido.")
 
     # 4. Configurar Early Stopping
-    # Interrompe o treinamento se a 'val_loss' não melhorar por 3 épocas consecutivas
+    # Interrompe o treinamento se a 'val_loss' não melhorar por 5 épocas consecutivas.
+    # Precisa ser maior que a patience=3 do ReduceLROnPlateau, senão a taxa nunca é reduzida
     early_stop = EarlyStopping(
         monitor='val_loss',
-        patience=3,
+        patience=5,
         mode='min',
         verbose=False
     )
@@ -186,6 +187,7 @@ def objective(trial, model_name, datamodule, test_mode=False):
         "callbacks": [early_stop],
         "enable_progress_bar": False, # Desliga a barra para não poluir o terminal na tunagem
         "logger": False, # Evita criar centenas de pastas de logs no disco
+        "enable_checkpointing": False, # Evita gravar um .ckpt por trial
         "enable_model_summary": False
     }
 
@@ -238,6 +240,9 @@ def run_tuning(models_to_tune, datamodule, n_trials=15, test_mode=False):
         print(f"\n--> Tunagem de {model_name} concluída!")
         print(f"--> Menor Val Loss: {study.best_value:.4f}")
         print(f"--> Melhores Hiperparâmetros: {study.best_params}")
+
+        # Salva a cada modelo para não perder a tunagem em caso de interrupção
+        pd.DataFrame(melhores_resultados).to_csv('tune_results.csv')
 
     return melhores_resultados
 
