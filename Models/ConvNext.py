@@ -39,7 +39,7 @@ class ConvNeXtCaptcha(pl.LightningModule):
                  dims=[96, 192, 384, 768],
                  expansion_ratio=4,
                  weight_decay=0.05,
-                 cosine_t_max=20):
+                 cosine_t_max=None):  # None usa o max_epochs do Trainer
                      
         super(ConvNeXtCaptcha, self).__init__()
         self.save_hyperparameters()
@@ -79,6 +79,11 @@ class ConvNeXtCaptcha(pl.LightningModule):
         self.norm = nn.LayerNorm(dims[-1], eps=1e-6)
         self.head = nn.Linear(dims[-1], self.num_chars * self.num_classes)
         self.criterion = nn.CrossEntropyLoss()
+
+    @property
+    def features(self):
+        # Alvo do Grad-CAM: a saída do último estágio é o último mapa espacial do modelo
+        return self.stages[-1]
 
     def forward(self, x):
         for i in range(len(self.stages)):
@@ -128,5 +133,7 @@ class ConvNeXtCaptcha(pl.LightningModule):
 
     def configure_optimizers(self):
         optimizer = optim.AdamW(self.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay)
-        scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=self.cosine_t_max)
+        # Com T_max menor que o total de épocas, o cosseno voltaria a subir a taxa de aprendizado
+        t_max = self.cosine_t_max or self.trainer.max_epochs
+        scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=t_max)
         return {"optimizer": optimizer, "lr_scheduler": {"scheduler": scheduler, "interval": "epoch"}}

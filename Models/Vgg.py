@@ -66,6 +66,11 @@ class VGGCaptcha(pl.LightningModule):
 
         self.criterion = nn.CrossEntropyLoss()
 
+    @property
+    def features(self):
+        # Alvo do Grad-CAM. O nome vgg_features é mantido para não invalidar checkpoints
+        return self.vgg_features
+
     def forward(self, x):
         features = self.vgg_features(x)
         flattened = torch.flatten(features, 1)
