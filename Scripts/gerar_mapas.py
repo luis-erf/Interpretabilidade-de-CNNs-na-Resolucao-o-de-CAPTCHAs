@@ -10,6 +10,7 @@ import pytorch_lightning as pl
 import torch
 
 from Dataset.Datamodule import CaptchaDataModule, idx2char
+from Models.AlexNet import AlexNetCaptcha
 from Models.ConvNext import ConvNeXtCaptcha
 from Models.EfficientNet import EfficientNetCaptcha
 from Models.Vgg import VGGCaptcha
@@ -46,6 +47,7 @@ Opções úteis:
 RANDOM_SEED = 42
 
 MODELOS = {
+    "AlexNetCaptcha": AlexNetCaptcha,
     "VGGCaptcha": VGGCaptcha,
     "ConvNeXtCaptcha": ConvNeXtCaptcha,
     "EfficientNetCaptcha": EfficientNetCaptcha,
