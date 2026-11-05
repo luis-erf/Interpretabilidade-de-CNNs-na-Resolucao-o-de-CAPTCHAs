@@ -1,19 +1,18 @@
 import argparse
-import warnings
 import logging
+import warnings
 
 import optuna
+import pandas as pd
 import pytorch_lightning as pl
 from pytorch_lightning.callbacks import EarlyStopping
 import torch
-import pandas as pd
 
 from Dataset.Datamodule import CaptchaDataModule
 from Models.ConvNext import ConvNeXtCaptcha
-from Models.Vgg import VGGCaptcha
-from Models.ResNet import ResNetCaptcha
 from Models.Inception import InceptionCaptcha
-
+from Models.ResNet import ResNetCaptcha
+from Models.Vgg import VGGCaptcha
 
 # 1. Silencia avisos de deprecamento e warnings gerais do Python/Lightning
 warnings.filterwarnings("ignore")
@@ -26,7 +25,7 @@ logging.getLogger("pytorch_lightning").setLevel(logging.ERROR)
 
 """
 ======================================================================================
-SCRIPT DE TUNAGEM DE HIPERPARÂMETROS - MODELOS DE CAPTCHA (VGG e ConvNeXt)
+SCRIPT DE TUNAGEM DE HIPERPARÂMETROS - MODELOS DE CAPTCHA
 ======================================================================================
 
 Este script realiza a busca automatizada dos melhores hiperparâmetros para as 
@@ -49,60 +48,27 @@ COMO EXECUTAR:
 3. Opções úteis:
    --modelos ResNetCaptcha InceptionCaptcha   Tuna apenas os modelos escolhidos
    --diretorio_dados caminho/da/pasta         Pasta do dataset (padrão: dataset_captcha)
-
---------------------------------------------------------------------------------------
-COMO ADICIONAR NOVOS MODELOS:
---------------------------------------------------------------------------------------
-Para inserir uma nova arquitetura (ex: ResNet) na tunagem, siga 4 passos simples:
-  1. Importe a classe do novo modelo no topo do script.
-  2. Crie uma nova chave com o nome do modelo no dicionário `SEARCH_SPACE` 
-     definindo as faixas de valores (low/high) dos seus hiperparâmetros.
-  3. Na função `objective()`, adicione um `elif model_name == "NomeDoSeuModelo":` 
-     para instanciar a classe passando o dicionário `**params`.
-  4. Adicione a string com o nome do modelo na lista `MODELOS_PARA_TUNAR` 
-     no final do arquivo.
-
---------------------------------------------------------------------------------------
-PARTES IMPORTANTES DA ARQUITETURA DO CÓDIGO:
---------------------------------------------------------------------------------------
-A. O Dicionário `SEARCH_SPACE`:
-   É o "coração" do script. Ao invés de alterar variáveis espalhadas pelo código, 
-   todas as faixas de busca (learning rate, dropout, camadas densas) estão unificadas 
-   neste dicionário no topo do arquivo. Para testar novos valores, basta alterá-lo.
-
-B. Reprodutibilidade Total (Seeds):
-   Para garantir o padrão acadêmico e resultados determinísticos (mesmo resultado em 
-   execuções diferentes), o código trava as sementes globais (PyTorch, Numpy, CUDA) 
-   usando `pl.seed_everything(42)` e fixa o explorador do Optuna com `TPESampler(seed=42)`.
-
-C. Prevenção de Gargalos de Armazenamento:
-   O PyTorch Lightning está configurado com `enable_checkpointing=False`. Isso evita 
-   que o Optuna grave centenas de arquivos pesados de pesos (.ckpt) no HD do cluster 
-   durante as dezenas de iterações inúteis, salvando espaço em disco.
-
-D. Redução de Verbosidade:
-   Filtros nativos desativam logs do Optuna, warnings de descontinuação do Python 
-   e barras de progresso do Lightning, mantendo o terminal limpo e focado apenas 
-   nos resultados finais de cada Trial. Caso não queira que isso ocorra, basta
-   comentar essa parte do código
+   --saida tune_results.csv                   Nome/caminho do CSV de saída
+   --n_trials 50                              Quantidade de iterações por modelo
+   --batch_size 32                            Tamanho do lote
+   --num_workers 2                            Número de workers no DataModule
+   --max_epochs 15                            Máximo de épocas por trial
+   --patience 3                               Paciência do EarlyStopping
+   --seed 42                                  Semente aleatória global
 ======================================================================================
 """
 
-RANDOM_SEED = 42
-
 # =====================================================================
-# 1. DICIONÁRIO DE ESPAÇO DE BUSCA (SEARCH SPACE)
+# 1. ESPAÇO DE BUSCA E MAPEAMENTO DE MODELOS
 # =====================================================================
-# Você pode adicionar, remover ou alterar os limites dos hiperparâmetros aqui.
+# Nomes alinhados exatamente com a chave do dicionário MODELOS do train_final.py
 SEARCH_SPACE = {
     "VGGCaptcha": {
         "learning_rate": {"type": "log_float", "low": 1e-4, "high": 1e-2},
         "dropout_rate": {"type": "float", "low": 0.2, "high": 0.6},
-        # Representamos as camadas densas como strings para o Optuna escolher,
-        # e depois convertemos para listas dentro da função objective.
         "fc_sizes_str": {"type": "categorical", "choices": ["512", "1024", "512_512"]}
     },
-    "ConvNeXtCaptcha": {
+    "ConvNextCaptcha": {  # 'x' minúsculo para alinhar com train_final.py
         "learning_rate": {"type": "log_float", "low": 1e-4, "high": 1e-2},
         "weight_decay": {"type": "log_float", "low": 1e-5, "high": 1e-2},
         "expansion_ratio": {"type": "categorical", "choices": [2, 4, 6]}
@@ -120,17 +86,24 @@ SEARCH_SPACE = {
         "pool_width": {"type": "categorical", "choices": [1, 4, 5]}
     }
 }
-# =====================================================================
+
+MODELOS_MAP = {
+    "VGGCaptcha": VGGCaptcha,
+    "ConvNextCaptcha": ConvNeXtCaptcha,
+    "ResNetCaptcha": ResNetCaptcha,
+    "InceptionCaptcha": InceptionCaptcha,
+}
+
 
 def parse_fc_sizes(fc_str):
-    """Função auxiliar para converter a escolha da camada densa da VGG de string para lista"""
-    return [int(x) for x in fc_str.split('_')]
+    """Função auxiliar para converter a escolha da camada densa da VGG de string para lista."""
+    return [int(x) for x in str(fc_str).split('_')]
 
-def objective(trial, model_name, datamodule, test_mode=False):
+
+def objective(trial, model_name, datamodule, args):
     """
     Função objetivo que o Optuna tenta otimizar (minimizar a perda de validação).
     """
-    # 2. Extrair hiperparâmetros sugeridos pelo Optuna para esta iteração (trial)
     params = {}
     for param_name, config in SEARCH_SPACE[model_name].items():
         p_type = config["type"]
@@ -141,87 +114,74 @@ def objective(trial, model_name, datamodule, test_mode=False):
         elif p_type == "categorical":
             params[param_name] = trial.suggest_categorical(param_name, config["choices"])
 
-    # 3. Instanciar o modelo correspondente com os hiperparâmetros escolhidos
+    # Cópia para instanciação do modelo sem remover a chave 'fc_sizes_str' do trial.params
+    model_kwargs = params.copy()
+
     if model_name == "VGGCaptcha":
-        # Converte a string sugerida de volta para a lista (ex: "512_512" -> [512, 512])
-        params["fc_sizes"] = parse_fc_sizes(params.pop("fc_sizes_str"))
-        model = VGGCaptcha(**params)
-        
-    elif model_name == "ConvNeXtCaptcha":
-        model = ConvNeXtCaptcha(**params)
-
-    elif model_name == "ResNetCaptcha":
-        model = ResNetCaptcha(**params)
-
-    elif model_name == "InceptionCaptcha":
-        model = InceptionCaptcha(**params)
+        model_kwargs["fc_sizes"] = parse_fc_sizes(model_kwargs.pop("fc_sizes_str"))
+        model = VGGCaptcha(**model_kwargs)
+    elif model_name in MODELOS_MAP:
+        model = MODELOS_MAP[model_name](**model_kwargs)
     else:
         raise ValueError(f"Modelo {model_name} não reconhecido.")
 
-    # 4. Configurar Early Stopping
-    # Interrompe o treinamento se a 'val_loss' não melhorar por 3 épocas consecutivas
+    # Configurar Early Stopping com a paciência vinda dos argumentos
     early_stop = EarlyStopping(
         monitor='val_loss',
-        patience=3,
+        patience=args.patience,
         mode='min',
         verbose=False
     )
 
-    # 5. Configurar o Trainer do PyTorch Lightning
     trainer_kwargs = {
-        "max_epochs": 15 if not test_mode else 1, # Apenas 1 época se for teste de sanidade
+        "max_epochs": args.max_epochs if not args.test else 1,
         "callbacks": [early_stop],
-        "enable_progress_bar": False, # Desliga a barra para não poluir o terminal na tunagem
-        "logger": False, # Evita criar centenas de pastas de logs no disco
+        "enable_progress_bar": False,
+        "logger": False,
         "enable_model_summary": False
     }
 
-    # Se estiver em TEST_MODE, limita os dados para o código rodar em segundos
-    if test_mode:
+    if args.test:
         trainer_kwargs["limit_train_batches"] = 2
         trainer_kwargs["limit_val_batches"] = 2
 
-    # Inicializa o treinador
     trainer = pl.Trainer(**trainer_kwargs)
-
-    # 6. Iniciar o Treinamento
     trainer.fit(model, datamodule=datamodule)
 
-    # 7. Recuperar o MELHOR resultado de validação alcançado nesta tentativa
     best_val_loss = early_stop.best_score
-    
     if best_val_loss is None:
-        return float('inf') # Se algo falhar drasticamente, descarta a tentativa
-        
+        return float('inf')
+
     return best_val_loss.item()
 
-def run_tuning(models_to_tune, datamodule, n_trials=15, test_mode=False):
+
+def run_tuning(models_to_tune, datamodule, args):
     """
     Executa a tunagem para uma lista de modelos e retorna um dicionário com os melhores resultados.
     """
     melhores_resultados = {}
-
-    #TRAVA A SEED DO OPTUNA
-    sampler_deterministico = optuna.samplers.TPESampler(seed=RANDOM_SEED)
+    sampler_deterministico = optuna.samplers.TPESampler(seed=args.seed)
 
     for model_name in models_to_tune:
         print(f"\n{'='*50}")
         print(f" Iniciando Tunagem para: {model_name} ")
         print(f"{'='*50}")
 
-        # Cria um 'study' (estudo) no Optuna com o objetivo de minimizar o erro
-        study = optuna.create_study(direction="minimize", study_name=f"Tuning_{model_name}", sampler=sampler_deterministico)
-        
-        # Ajusta a quantidade de iterações do Optuna se for um teste rápido
-        trials_to_run = 2 if test_mode else n_trials
+        study = optuna.create_study(
+            direction="minimize",
+            study_name=f"Tuning_{model_name}",
+            sampler=sampler_deterministico
+        )
 
-        # Executa a otimização
-        study.optimize(lambda trial: objective(trial, model_name, datamodule, test_mode), 
-                       n_trials=trials_to_run)
+        trials_to_run = 2 if args.test else args.n_trials
 
-        # Salva os melhores hiperparâmetros deste modelo
+        study.optimize(
+            lambda trial: objective(trial, model_name, datamodule, args),
+            n_trials=trials_to_run
+        )
+
         melhores_resultados[model_name] = study.best_params
-        
+
         print(f"\n--> Tunagem de {model_name} concluída!")
         print(f"--> Menor Val Loss: {study.best_value:.4f}")
         print(f"--> Melhores Hiperparâmetros: {study.best_params}")
@@ -231,42 +191,40 @@ def run_tuning(models_to_tune, datamodule, n_trials=15, test_mode=False):
 
 if __name__ == "__main__":
     # =====================================================================
-    # CONTROLE PRINCIPAL VIA TERMINAL
+    # CONTROLE PRINCIPAL VIA TERMINAL (ARGPARSE COMPLETO)
     # =====================================================================
     parser = argparse.ArgumentParser(description="Script de Tunagem de Modelos para CAPTCHA")
     parser.add_argument('--test', action='store_true', help="Ativa o modo de teste rápido (Sanity Check)")
     parser.add_argument('--diretorio_dados', default="dataset_captcha", help="Pasta com as imagens do dataset")
     parser.add_argument('--modelos', nargs='+', choices=list(SEARCH_SPACE), help="Tuna apenas os modelos escolhidos")
+    parser.add_argument('--saida', default="tune_results.csv", help="Caminho do CSV de saída")
+    parser.add_argument('--n_trials', type=int, default=50, help="Quantidade de tentativas do Optuna por modelo")
+    parser.add_argument('--batch_size', type=int, default=32, help="Tamanho do lote (batch size)")
+    parser.add_argument('--num_workers', type=int, default=2, help="Número de workers do DataModule")
+    parser.add_argument('--max_epochs', type=int, default=15, help="Número máximo de épocas por trial")
+    parser.add_argument('--patience', type=int, default=3, help="Paciência do EarlyStopping")
+    parser.add_argument('--seed', type=int, default=42, help="Semente aleatória global (seed)")
     args = parser.parse_args()
 
-    pl.seed_everything(RANDOM_SEED, workers=True)
+    pl.seed_everything(args.seed, workers=True)
 
-    # A variável agora recebe o valor passado no terminal (True se --test existir, False caso contrário)
-    TEST_MODE = args.test
-    
-    # Define quais modelos do SEARCH_SPACE queremos tunar agora
-    MODELOS_PARA_TUNAR = ["VGGCaptcha", "ConvNeXtCaptcha", "ResNetCaptcha", "InceptionCaptcha"]
-    if args.modelos:
-        MODELOS_PARA_TUNAR = args.modelos
-    
-    print(f"Modo de Teste (Sanity Check): {'ATIVADO' if TEST_MODE else 'DESATIVADO'}")
-    
-    # Instancia o DataModule (Ajuste o caminho da pasta conforme seu gerador)
+    modelos_para_tunar = args.modelos if args.modelos else ["VGGCaptcha", "ConvNextCaptcha"]
+
+    print(f"Modo de Teste (Sanity Check): {'ATIVADO' if args.test else 'DESATIVADO'}")
+
     datamodule = CaptchaDataModule(
-        diretorio_dados=args.diretorio_dados, 
-        batch_size=32, 
-        num_workers=2
+        diretorio_dados=args.diretorio_dados,
+        batch_size=args.batch_size,
+        num_workers=args.num_workers,
+        random_seed=args.seed
     )
-    
-    # Chama a função principal de tunagem
+
     resultados_finais = run_tuning(
-        models_to_tune=MODELOS_PARA_TUNAR, 
-        datamodule=datamodule, 
-        n_trials=20, # Quantidade de tentativas reais no Optuna por modelo (ignorado no modo teste)
-        test_mode=TEST_MODE
+        models_to_tune=modelos_para_tunar,
+        datamodule=datamodule,
+        args=args
     )
-    
-    # Exibe o dicionário final exigido
+
     print("\n\n" + "#"*50)
     print(" RESUMO FINAL DA TUNAGEM ")
     print("#"*50)
@@ -274,5 +232,12 @@ if __name__ == "__main__":
         print(f"\nModelo: {modelo}")
         for param, valor in hiperparametros.items():
             print(f"  - {param}: {valor}")
+
+    # =====================================================================
+    # EXPORTAÇÃO PARA CSV (FORMATO ESPERADO PELO TRAIN_FINAL.PY)
+    # =====================================================================
+    # As chaves principais (nomes dos modelos) viram as COLUNAS.
+    # Os nomes dos hiperparâmetros viram as LINHAS (índice da primeira coluna).
     df = pd.DataFrame(resultados_finais)
-    df.to_csv('tune_results.csv')
+    df.to_csv(args.saida)
+    print(f"\n[OK] Resultados salvos com sucesso em '{args.saida}'")
