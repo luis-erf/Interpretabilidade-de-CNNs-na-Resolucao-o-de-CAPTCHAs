@@ -8,7 +8,7 @@ class ConvNeXtBlock(nn.Module):
         super().__init__()
         self.dwconv = nn.Conv2d(dim, dim, kernel_size=7, padding=3, groups=dim)
         self.norm = nn.LayerNorm(dim, eps=1e-6)
-        
+
         self.pwconv1 = nn.Linear(dim, expansion_ratio * dim) 
         self.act = nn.GELU()
         self.pwconv2 = nn.Linear(expansion_ratio * dim, dim)
@@ -17,12 +17,12 @@ class ConvNeXtBlock(nn.Module):
         input = x
         x = self.dwconv(x)
         x = x.permute(0, 2, 3, 1) # (B, C, H, W) -> (B, H, W, C)
-        
+
         x = self.norm(x)
         x = self.pwconv1(x)
         x = self.act(x)
         x = self.pwconv2(x)
-        
+
         x = x.permute(0, 3, 1, 2) # (B, H, W, C) -> (B, C, H, W)
         x = input + x
         return x
@@ -33,14 +33,16 @@ class ConvNeXtCaptcha(pl.LightningModule):
                  num_classes=36, 
                  num_chars=5, 
                  learning_rate=1e-3,
+                 weight_decay=0.05,
                  # Hiperparâmetros Arquiteturais Dinâmicos
                  in_channels=3,
                  depths=[3, 3, 9, 3],
                  dims=[96, 192, 384, 768],
                  expansion_ratio=4,
-                 weight_decay=0.05,
+                 dropout_rate=0.0,
+                 pool_width=1,  # Preserva a ordem horizontal dos caracteres
                  cosine_t_max=20):
-                     
+
         super(ConvNeXtCaptcha, self).__init__()
         self.save_hyperparameters()
         self.num_classes = num_classes
@@ -50,44 +52,42 @@ class ConvNeXtCaptcha(pl.LightningModule):
         self.cosine_t_max = cosine_t_max
 
         # =====================================================================
-        # CONSTRUTOR DINÂMICO DA CONVNEXT
+        # CONSTRUTOR DINÂMICO UNIFICADO DA CONVNEXT (self.features)
         # =====================================================================
-        self.downsample_layers = nn.ModuleList()
-        stem = nn.Sequential(
-            nn.Conv2d(in_channels, dims[0], kernel_size=4, stride=4),
-            nn.GroupNorm(1, dims[0], eps=1e-6) 
-        )
-        self.downsample_layers.append(stem)
+        layers = []
 
-        # Camadas de Redução Dinâmicas baseadas na lista 'dims'
-        for i in range(len(dims) - 1):
-            downsample_layer = nn.Sequential(
-                nn.GroupNorm(1, dims[i], eps=1e-6),
-                nn.Conv2d(dims[i], dims[i+1], kernel_size=2, stride=2),
-            )
-            self.downsample_layers.append(downsample_layer)
+        # 1. Stem: Primeira redução espacial (stride 4)
+        layers.append(nn.Conv2d(in_channels, dims[0], kernel_size=4, stride=4))
+        layers.append(nn.GroupNorm(1, dims[0], eps=1e-6))
 
-        # Estágios principais dinâmicos baseados nas listas 'depths' e 'dims'
-        self.stages = nn.ModuleList()
+        # 2. Estágios Principais + Camadas de Downsampling intermediárias
         for i in range(len(depths)):
-            stage = nn.Sequential(
-                *[ConvNeXtBlock(dim=dims[i], expansion_ratio=expansion_ratio) for _ in range(depths[i])]
-            )
-            self.stages.append(stage)
+            # Adiciona downsampling entre estágios (a partir do 2º estágio)
+            if i > 0:
+                layers.append(nn.GroupNorm(1, dims[i-1], eps=1e-6))
+                layers.append(nn.Conv2d(dims[i-1], dims[i], kernel_size=2, stride=2))
+            
+            # Adiciona os blocos ConvNeXt do estágio atual
+            for _ in range(depths[i]):
+                layers.append(ConvNeXtBlock(dim=dims[i], expansion_ratio=expansion_ratio))
+
+        self.features = nn.Sequential(*layers)
         # =====================================================================
 
-        self.norm = nn.LayerNorm(dims[-1], eps=1e-6)
-        self.head = nn.Linear(dims[-1], self.num_chars * self.num_classes)
+        # Classificador e Pooling padronizados (idênticos à ResNet)
+        self.pool = nn.AdaptiveAvgPool2d((1, pool_width))
+        self.classifier = nn.Sequential(
+            nn.Dropout(p=dropout_rate),
+            nn.Linear(dims[-1] * pool_width, self.num_chars * self.num_classes),
+        )
+
         self.criterion = nn.CrossEntropyLoss()
 
     def forward(self, x):
-        for i in range(len(self.stages)):
-            x = self.downsample_layers[i](x)
-            x = self.stages[i](x)
-            
-        x = x.mean([-2, -1]) # Global Average Pooling
-        x = self.norm(x)
-        logits = self.head(x)
+        x = self.features(x)
+        x = self.pool(x)
+        x = torch.flatten(x, 1)
+        logits = self.classifier(x)
         logits = logits.view(-1, self.num_chars, self.num_classes)
         return logits
 
@@ -96,7 +96,7 @@ class ConvNeXtCaptcha(pl.LightningModule):
         total = targets.size(0) * self.num_chars
         for i in range(self.num_chars):
             loss += self.criterion(logits[:, i, :], targets[:, i])
-        
+
         predicoes = torch.argmax(logits, dim=2)
         corretos = (predicoes == targets).sum().item()
         acc = corretos / total
@@ -117,7 +117,7 @@ class ConvNeXtCaptcha(pl.LightningModule):
         self.log('val_loss', loss, prog_bar=True)
         self.log('val_acc', acc, prog_bar=True)
         return loss
-        
+
     def test_step(self, batch, batch_idx):
         images, labels = batch
         logits = self(images)
