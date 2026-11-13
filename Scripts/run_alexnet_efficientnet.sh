@@ -26,6 +26,11 @@ mkdir -p logs
 
 source .venv/bin/activate
 
+# Temporários no disco local do nó: no NFS da home, a limpeza dos workers do
+# DataLoader gera "OSError: Device or resource busy: .nfs..."
+export TMPDIR="$(mktemp -d /tmp/captcha-XXXXXX)"
+trap 'rm -rf "$TMPDIR"' EXIT
+
 DADOS="${DADOS:-dataset_captcha}"
 TEST="${TEST:-}"
 ETAPAS="${ETAPAS:-tune train scaling}"
@@ -35,6 +40,8 @@ if [[ " $ETAPAS " == *" tune "* ]]; then
 echo "=== 1/3 Tunagem AlexNet ==="
 python -m Scripts.tune_models $TEST --modelos AlexNetCaptcha \
     --diretorio_dados "$DADOS" --saida tune_results_alexnet.csv
+# O Trainer da tunagem grava um .ckpt por trial em checkpoints/, que nenhuma etapa usa
+rm -rf checkpoints
 fi
 
 if [[ " $ETAPAS " == *" train "* ]]; then
