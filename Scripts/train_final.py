@@ -57,7 +57,7 @@ RANDOM_SEED = 42
 MODELOS = {
     "AlexNetCaptcha": AlexNetCaptcha,
     "VGGCaptcha": VGGCaptcha,
-    "ConvNeXtCaptcha": ConvNeXtCaptcha,
+    "ConvNextCaptcha": ConvNeXtCaptcha,
     "EfficientNetCaptcha": EfficientNetCaptcha,
     "ResNetCaptcha": ResNetCaptcha,
     "InceptionCaptcha": InceptionCaptcha,
