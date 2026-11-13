@@ -26,10 +26,17 @@ mkdir -p logs
 
 source .venv/bin/activate
 
-# Temporários no disco local do nó: no NFS da home, a limpeza dos workers do
-# DataLoader gera "OSError: Device or resource busy: .nfs..."
-export TMPDIR="$(mktemp -d /tmp/captcha-XXXXXX)"
-trap 'rm -rf "$TMPDIR"' EXIT
+# Temporários fora do NFS da home: lá a limpeza dos workers do DataLoader gera
+# "OSError: Device or resource busy: .nfs...". /dev/shm (RAM) é tentado primeiro
+# porque o /tmp de alguns nós fica sem espaço.
+for base in /dev/shm /tmp; do
+    if TMP_JOB="$(mktemp -d "$base/captcha-XXXXXX" 2>/dev/null)"; then
+        export TMPDIR="$TMP_JOB"
+        trap 'rm -rf "$TMP_JOB"' EXIT
+        break
+    fi
+done
+echo "TMPDIR=${TMPDIR:-padrão}"
 
 DADOS="${DADOS:-dataset_captcha}"
 TEST="${TEST:-}"
