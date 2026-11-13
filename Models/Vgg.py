@@ -41,7 +41,7 @@ class VGGCaptcha(pl.LightningModule):
                 
             layers.append(nn.MaxPool2d(kernel_size=2, stride=2))
             
-        self.vgg_features = nn.Sequential(*layers)
+        self.features = nn.Sequential(*layers)
         # =====================================================================
 
         # Cálculo dinâmico do tamanho do tensor achatado (Flatten)
@@ -72,7 +72,7 @@ class VGGCaptcha(pl.LightningModule):
         return self.vgg_features
 
     def forward(self, x):
-        features = self.vgg_features(x)
+        features = self.features(x)
         flattened = torch.flatten(features, 1)
         logits = self.classifier(flattened)
         logits = logits.view(-1, self.num_chars, self.num_classes)

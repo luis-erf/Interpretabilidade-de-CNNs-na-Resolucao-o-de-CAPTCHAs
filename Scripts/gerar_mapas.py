@@ -32,15 +32,21 @@ CONJUNTO DE TESTE, salva uma figura por imagem: uma linha por caractere (posiç�
 uma coluna por método. Não re-treina nada.
 
 COMO EXECUTAR:
-   python -m Scripts.gerar_mapas --modelo ResNetCaptcha \\
-       --ckpt checkpoints_finais/ResNetCaptcha.ckpt \\
+   python -m Scripts.gerar_mapas --modelo ResNetCaptcha \
+       --ckpt checkpoints_finais/ResNetCaptcha.ckpt \
+       --diretorio_dados dataset_captcha_2/dataset_captcha
+
+MODO DE TESTE (Sanity Check):
+   python -m Scripts.gerar_mapas --test --modelo ResNetCaptcha \
+       --ckpt checkpoints_finais/ResNetCaptcha.ckpt \
        --diretorio_dados dataset_captcha_2/dataset_captcha
 
 Opções úteis:
+   --test                    Modo rápido (Sanity Check): 1 imagem e 10 amostras de LIME
    --n_imagens 10            Quantidade de imagens do teste a explicar
    --metodos gradcam ig lime Métodos a aplicar (padrão: os três)
    --saida mapas             Pasta de saída (uma subpasta por modelo)
-   --amostras_lime 1000      Perturbações do LIME (é o método mais lento)
+   --amostras_lime 1000     Perturbações do LIME (é o método mais lento)
 ======================================================================================
 """
 
@@ -49,7 +55,7 @@ RANDOM_SEED = 42
 MODELOS = {
     "AlexNetCaptcha": AlexNetCaptcha,
     "VGGCaptcha": VGGCaptcha,
-    "ConvNeXtCaptcha": ConvNeXtCaptcha,
+    "ConvNextCaptcha": ConvNeXtCaptcha,
     "EfficientNetCaptcha": EfficientNetCaptcha,
     "ResNetCaptcha": ResNetCaptcha,
     "InceptionCaptcha": InceptionCaptcha,
@@ -98,6 +104,7 @@ def gerar_figura(model, imagem, rotulo, metodos, args, caminho):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Gera mapas Grad-CAM, IG e LIME sobre o conjunto de teste")
+    parser.add_argument('--test', action='store_true', help="Ativa o modo de teste rápido (Sanity Check)")
     parser.add_argument('--modelo', required=True, choices=list(MODELOS))
     parser.add_argument('--ckpt', required=True, help="Checkpoint treinado (.ckpt)")
     parser.add_argument('--diretorio_dados', default="dataset_captcha")
@@ -108,6 +115,13 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     pl.seed_everything(RANDOM_SEED, workers=True)
+
+    if args.test:
+        print("Modo de Teste (Sanity Check): ATIVADO")
+        args.n_imagens = min(args.n_imagens, 1)
+        args.amostras_lime = 10
+    else:
+        print("Modo de Teste (Sanity Check): DESATIVADO")
 
     model = MODELOS[args.modelo].load_from_checkpoint(args.ckpt, map_location="cpu")
     model.eval()
