@@ -25,6 +25,13 @@ python -m ataque_local.robo --modelo AlexNetCaptcha \
     --ckpt resultados_bernardo/checkpoints_finais/AlexNetCaptcha.ckpt --tentativas 10 --visivel --lento 600
 ```
 
+Demonstração lado a lado (AlexNet à esquerda, EfficientNet à direita, mesma sequência de CAPTCHAs):
+
+```bash
+bash ataque_local/demo.sh            # 15 tentativas, 700 ms entre ações
+bash ataque_local/demo.sh 30 1200    # tentativas, atraso em ms
+```
+
 Os CAPTCHAs usam a mesma biblioteca e formato do dataset (`ImageCaptcha` 160×60, 5 caracteres A–Z/0–9).
 Com `--seed`, a sequência de CAPTCHAs é a mesma a cada reinício, o que permite comparar modelos no mesmo conjunto.
 
@@ -42,6 +49,17 @@ Com `--seed`, a sequência de CAPTCHAs é a mesma a cada reinício, o que permit
 - A confiança mínima entre os 5 caracteres separa bem acertos de erros (mediana AlexNet: 0,994 nos acertos
   e 0,714 nos erros; EfficientNet: 1,000 e 0,868). Um atacante poderia pedir um CAPTCHA novo quando a
   confiança é baixa, e a taxa efetiva subiria ainda mais.
+
+## Há vazamento (leakage) do treino?
+
+Não. O servidor gera cada CAPTCHA na hora, com texto e ruído novos; ele não lê o `dataset_captcha`.
+Conferido nas 1.000 tentativas da tabela acima:
+
+- 0 dos textos aparecem no conjunto de treino (nem no dataset inteiro, que tem 29.992 textos de 36⁵ ≈ 60 milhões possíveis);
+- 0 das 131 imagens de erro são idênticas a algum arquivo do dataset (comparação por hash).
+
+Ressalva: os CAPTCHAs vêm do **mesmo gerador** (`ImageCaptcha`, mesma fonte, tamanho e ruído). O ataque mede
+desempenho em dados novos da mesma distribuição, não generalização para outros estilos de CAPTCHA.
 
 ## Saídas
 

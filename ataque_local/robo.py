@@ -20,6 +20,11 @@ Demonstração visual (navegador aberto e passos mais lentos):
    python -m ataque_local.robo --modelo AlexNetCaptcha \
        --ckpt resultados_bernardo/checkpoints_finais/AlexNetCaptcha.ckpt --tentativas 10 --visivel --lento 600
 
+Dois modelos lado a lado (cada um contra seu servidor, para placares separados):
+   python -m ataque_local.servidor --porta 5050 &  python -m ataque_local.servidor --porta 5051 &
+   python -m ataque_local.robo --modelo AlexNetCaptcha ... --url http://127.0.0.1:5050/ --visivel --lento 700 &
+   python -m ataque_local.robo --modelo EfficientNetCaptcha ... --url http://127.0.0.1:5051/ --visivel --lento 700 --janela_x 580
+
 Saída em ataque_local/resultados/<modelo>/:
    tentativas.csv   uma linha por tentativa (previsto, correto, acertou, confiança, tempos)
    erros/           imagens que o modelo errou, para gerar mapas de XAI depois
@@ -86,6 +91,7 @@ if __name__ == "__main__":
     parser.add_argument("--tentativas", type=int, default=100)
     parser.add_argument("--visivel", action="store_true", help="Abre o navegador na tela (demonstração)")
     parser.add_argument("--lento", type=int, default=0, help="Atraso em ms entre ações do navegador")
+    parser.add_argument("--janela_x", type=int, default=0, help="Posição horizontal da janela (com --visivel)")
     parser.add_argument("--saida", default="ataque_local/resultados")
     args = parser.parse_args()
     garantir_local(args.url)
@@ -105,7 +111,8 @@ if __name__ == "__main__":
         escritor.writerow(["tentativa", "previsto", "correto", "acertou", "confianca_min",
                            "tempo_inferencia_ms", "tempo_total_ms"])
 
-        navegador = p.chromium.launch(headless=not args.visivel, slow_mo=args.lento)
+        navegador = p.chromium.launch(headless=not args.visivel, slow_mo=args.lento,
+                                      args=[f"--window-position={args.janela_x},0", "--window-size=560,760"])
         pagina = navegador.new_page(viewport={"width": 520, "height": 640})
         pagina.goto(args.url)
 
