@@ -1,2 +1,4 @@
 /dataset_captcha
 .venv/
+*.ckpt
+checkpoints/
