@@ -23,3 +23,9 @@ lime>=0.2.0
 scikit-image>=0.20.0
 matplotlib>=3.7.0
 pandas>=2.0.0
+
+# ==========================
+# 5. Ataque controlado (ataque_local/)
+# ==========================
+flask>=3.0.0
+playwright>=1.40.0

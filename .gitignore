@@ -2,3 +2,4 @@
 .venv/
 *.ckpt
 checkpoints/
+__pycache__/
