@@ -27,6 +27,7 @@ import threading
 import uuid
 from collections import OrderedDict
 
+import captcha.image
 from captcha.image import ImageCaptcha
 from flask import Flask, abort, redirect, render_template_string, request, send_file, url_for
 
@@ -100,11 +101,21 @@ PAGINA = """<!doctype html>
 </html>"""
 
 
+class SecretsComSeed(random.Random):
+    """Substituto determinístico do módulo `secrets` (randbelow, randbits e choice)."""
+
+    def randbelow(self, n):
+        return self.randrange(n)
+
+    def randbits(self, k):
+        return self.getrandbits(k)
+
+
 def novo_captcha():
     with trava:
         texto = "".join(rng.choices(CARACTERES, k=TAMANHO_TEXTO))
         id_captcha = uuid.UUID(int=rng.getrandbits(128)).hex
-        # ImageCaptcha usa o random global: gerar dentro da trava mantém a sequência reproduzível
+        # Gerar dentro da trava mantém a sequência de imagens reproduzível com --seed
         pendentes[id_captcha] = (texto, gerador_imagem.generate(texto).getvalue())
         while len(pendentes) > MAX_PENDENTES:
             pendentes.popitem(last=False)
@@ -161,6 +172,9 @@ if __name__ == "__main__":
     args = parser.parse_args()
     if args.seed is not None:
         rng.seed(args.seed)
-        random.seed(args.seed)  # ruído/distorção do ImageCaptcha
+        # A biblioteca captcha sorteia fonte, distorção, cor e ruído com o módulo `secrets`,
+        # que ignora qualquer seed. Trocamos por um gerador com seed para que a mesma
+        # sequência de IMAGENS (não só de textos) se repita a cada reinício.
+        captcha.image.secrets = SecretsComSeed(args.seed)
     print(f"Servidor de CAPTCHA em http://127.0.0.1:{args.porta}")
     app.run(host="127.0.0.1", port=args.porta, threaded=True)
