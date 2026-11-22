@@ -1,0 +1,13 @@
+,valor
+imagens,"30,000"
+arquivos com problema,0
+textos únicos,"29,992"
+textos repetidos que cruzam splits,3
+imagens idênticas (hash),0
+split treino/val/teste,"21,000 / 4,500 / 4,500"
+χ² uniformidade dos caracteres (p),0.723
+χ² caractere × split (p),0.154
+CAPTCHAs com caractere repetido,25.3%
+média RGB do dataset,"0.860, 0.866, 0.858"
+fração de tinta média,29.3%
+CAPTCHAs com caracteres sobrepostos (sim.),92.1%

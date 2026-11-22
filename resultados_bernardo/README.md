@@ -13,6 +13,7 @@ Dataset: `dataset_captcha` (30.000 imagens, 5 caracteres, cópia do Drive), spli
 | `scaling_efficientnet_results.csv` | Escalonamento EfficientNet B0–B3, modos `profundidade_largura` e `composto` |
 | `logs/` | Saídas dos jobs SLURM (`captcha-sanity-30272` é o teste rápido com `--test`) |
 | `mapas_xai/` | Grad-CAM, Integrated Gradients e LIME em 10 imagens de teste por modelo (`Scripts/gerar_mapas.py`) |
+| `eda/` | Figuras e tabelas da análise exploratória do dataset (`Notebooks/analise_exploratoria.ipynb`) |
 | `checkpoints_finais/` | Pesos treinados (`.ckpt`). **Não vão para o git** (156 MB e 51 MB); ficam só localmente e no APUANA |
 
 ## Treino final
