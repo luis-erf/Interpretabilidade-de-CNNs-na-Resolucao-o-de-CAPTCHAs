@@ -105,6 +105,7 @@ class EfficientNetCaptcha(pl.LightningModule):
                  num_classes=36,
                  num_chars=5,
                  learning_rate=1e-3,
+                 weight_decay=0.0,
                  # Hiperparâmetros Arquiteturais Dinâmicos
                  in_channels=3,
                  version="b0",
@@ -117,6 +118,7 @@ class EfficientNetCaptcha(pl.LightningModule):
         self.num_classes = num_classes
         self.num_chars = num_chars
         self.learning_rate = learning_rate
+        self.weight_decay = weight_decay
 
         phi, _, default_dropout = scale_values[version]
         # A resolução de scale_values não é usada: as imagens do CAPTCHA mantêm o tamanho do dataset
@@ -211,6 +213,6 @@ class EfficientNetCaptcha(pl.LightningModule):
         return loss
 
     def configure_optimizers(self):
-        optimizer = optim.Adam(self.parameters(), lr=self.learning_rate)
+        optimizer = optim.Adam(self.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay)
         scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=3)
         return {"optimizer": optimizer, "lr_scheduler": {"scheduler": scheduler, "monitor": "val_loss"}}

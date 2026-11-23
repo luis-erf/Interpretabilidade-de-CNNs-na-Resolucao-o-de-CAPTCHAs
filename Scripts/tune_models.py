@@ -11,6 +11,7 @@ import torch
 from Dataset.Datamodule import CaptchaDataModule
 from Models.AlexNet import AlexNetCaptcha
 from Models.ConvNext import ConvNeXtCaptcha
+from Models.EfficientNet import EfficientNetCaptcha
 from Models.Inception import InceptionCaptcha
 from Models.ResNet import ResNetCaptcha
 from Models.Vgg import VGGCaptcha
@@ -93,6 +94,14 @@ SEARCH_SPACE = {
         "weight_decay": {"type": "log_float", "low": 1e-6, "high": 1e-2},
         "dropout_rate": {"type": "float", "low": 0.2, "high": 0.6},
         "pool_width": {"type": "categorical", "choices": [1, 4, 5]}
+    },
+    "EfficientNetCaptcha": {
+        # Só a B0 (versão padrão) é tunada; o padrão sem tunagem é lr 1e-3, sem weight decay,
+        # dropout 0.2 e survival_prob 0.8
+        "learning_rate": {"type": "log_float", "low": 1e-4, "high": 3e-3},
+        "weight_decay": {"type": "log_float", "low": 1e-6, "high": 1e-2},
+        "dropout_rate": {"type": "float", "low": 0.1, "high": 0.5},
+        "survival_prob": {"type": "float", "low": 0.6, "high": 1.0}
     }
 }
 
@@ -102,6 +111,7 @@ MODELOS_MAP = {
     "ConvNextCaptcha": ConvNeXtCaptcha,
     "ResNetCaptcha": ResNetCaptcha,
     "InceptionCaptcha": InceptionCaptcha,
+    "EfficientNetCaptcha": EfficientNetCaptcha,
 }
 
 
