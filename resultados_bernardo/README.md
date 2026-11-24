@@ -14,7 +14,7 @@ Dataset: `dataset_captcha` (30.000 imagens, 5 caracteres, cópia do Drive), spli
 | `logs/` | Saídas dos jobs SLURM (`captcha-sanity-30272` é o teste rápido com `--test`) |
 | `mapas_xai/` | Grad-CAM, Integrated Gradients e LIME em 10 imagens de teste por modelo (`Scripts/gerar_mapas.py`) |
 | `eda/` | Figuras e tabelas da análise exploratória do dataset (`Notebooks/analise_exploratoria.ipynb`) |
-| `checkpoints_finais/` | Pesos treinados (`.ckpt`). **Não vão para o git** (156 MB e 51 MB); ficam só localmente e no APUANA |
+| `checkpoints_finais/` | Pesos treinados (`.ckpt`, 156 MB e 51 MB). Não vão para o git: baixe da [Release `checkpoints-v1`](https://github.com/luis-erf/Interpretabilidade-de-CNNs-na-Resolucao-o-de-CAPTCHAs/releases/tag/checkpoints-v1) e coloque nesta pasta |
 
 ## Treino final
 
