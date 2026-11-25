@@ -1,6 +1,0 @@
-,AlexNetCaptcha
-learning_rate,7.873678789958814e-05
-weight_decay,5.029768526745262e-06
-dropout_rate,0.34296809674552814
-fc_sizes_str,2048_2048
-pool_width,9
